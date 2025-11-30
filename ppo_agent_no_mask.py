@@ -1,4 +1,4 @@
-#PPO Agent mit Action Masking on choose_action() and learn() function 
+#PPO Agent mit Action Masking on choose_action() and but no Action Masking on learn() function 
 
 #Learning the policy to maximize the reward 
 #Solving the Cartpole with PPO Clipping Objective
@@ -18,7 +18,6 @@ class PPOMemory:
         self.actions = [] #what the agent actually did in those states
         self.rewards = [] #rewards from the env after each action
         self.dones = [] #making episode terminate
-        self.masks = []
         self.batch_size = batch_size
 
     #sammle gespeicherte Arrays, berechne start_indices 
@@ -37,18 +36,16 @@ class PPOMemory:
                 np.array(self.vals),\
                 np.array(self.rewards),\
                 np.array(self.dones),\
-                np.array(self.masks),\
                 batches 
     
     #append a data from a single timesteps 
-    def store_memory(self, state, action, prob, val, reward, done, mask): 
+    def store_memory(self, state, action, prob, val, reward, done): 
         self.states.append(state)
         self.actions.append(action)
         self.probs.append(prob)
         self.vals.append(val)
         self.rewards.append(reward)
         self.dones.append(done)
-        self.masks.append(mask)
 
     #clear the memory at every trajectory, weil die Daten nach einem Policy Update veraltet sind und neue Daten gebraucht werden 
     def clear_memory(self):
@@ -58,14 +55,13 @@ class PPOMemory:
         self.vals = []
         self.rewards = []
         self.dones = []
-        self.masks = []
 
 #2. Actor network: learns the policy bzw. given a state it outputs a probability distribution over actions (decides which action to take during rollout)
 class ActorNetwork(nn.Module): #what action to take in each state?
     def __init__(self, n_actions, input_dims, alpha, fc1_dims=256, fc2_dims=256, chkpnt_dir=''):
         super(ActorNetwork, self).__init__()
         #file path for storing and saving weights (its restored seperately from critic weights)
-        self.checkpoint_file = os.path.join(chkpnt_dir, '/Users/macbookair/Desktop/researchUni/git/iiot-testbed-ppo/actor_weights_ac_mask') #store the path for saving weights
+        self.checkpoint_file = os.path.join(chkpnt_dir, '/Users/macbookair/Desktop/researchUni/git/iiot-testbed-ppo/actor_weights_no_mask') 
         #actor network 
         self.actor = nn.Sequential(
             nn.Linear(*input_dims, fc1_dims), #fully connected layers
@@ -99,7 +95,7 @@ class CriticNetwork(nn.Module): #how good is the state?
         super(CriticNetwork, self).__init__()
 
         #file path for storing and saving weights (its restored seperately from actor weights)
-        self.checkpoint_file = os.path.join(chkpt_dir, '/Users/macbookair/Desktop/researchUni/git/iiot-testbed-ppo/critic_weights_ac_mask')
+        self.checkpoint_file = os.path.join(chkpt_dir, '/Users/macbookair/Desktop/researchUni/git/iiot-testbed-ppo/critic_weights_no_mask')
         self.critic = nn.Sequential(
             nn.Linear(*input_dims, fc1_dims), 
             nn.ReLU(), #activation function for non-linearity
@@ -140,8 +136,8 @@ class Agent:
         self.memory = PPOMemory(batch_size) #replay buffer memory (stores state, action, old probab, value estimate, reward, done)
 
     #saves one transition into memory
-    def remember(self, state, action, prob, val, reward, done, mask):
-        self.memory.store_memory(state, action, prob, val, reward, done, mask)
+    def remember(self, state, action, prob, val, reward, done):
+        self.memory.store_memory(state, action, prob, val, reward, done)
     
     #save and load trained parameters 
     def save_models(self):
@@ -213,7 +209,7 @@ class Agent:
     def learn(self): 
         for _ in range(self.n_epochs):
             state_arr, action_arr, old_prob_arr, vals_arr,\
-            reward_arr, dones_arr, mask_arr, batches, = self.memory.generate_batches() #jeder 20 Episoden neue batches bekommen 
+            reward_arr, dones_arr, batches, = self.memory.generate_batches() #jeder 20 Episoden neue batches bekommen 
 
             #1. calculate advantage(how much the action was better than compared to avg expectation)
             values = vals_arr
@@ -237,21 +233,15 @@ class Agent:
                 states = torch.tensor(state_arr[batch], dtype=torch.float).to(self.actor.device)
                 old_probs = torch.tensor(old_prob_arr[batch]).to(self.actor.device)
                 actions = torch.tensor(action_arr[batch]).to(self.actor.device)
-                batch_mask = torch.tensor(mask_arr[batch], dtype=torch.bool).to(self.actor.device)
+        
 
                 #4. get new predictions
                 dist = self.actor(states) #! nur bei available Aktionen berechnen
                 critic_value = self.critic(states)
                 critic_value = torch.squeeze(critic_value)
 
-                #5. gültige Aktionen maskieren
-                probs = dist.probs.detach().clone()
-                probs[~batch_mask] = 0 # nur die gültigen Aktionen hier speichern
-                probs = probs / probs.sum(dim = 1, keepdim = True) # normalisieren
-                masked_dist = torch.distributions.Categorical(probs)
-
                 #5. calculate prob ratios - how much did the prob of this action changed since last update
-                new_probs = masked_dist.log_prob(actions)
+                new_probs = dist.log_prob(actions)
                 prob_ratio = (new_probs - old_probs).exp()
 
                 #6. ppo clipping

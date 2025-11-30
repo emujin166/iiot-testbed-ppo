@@ -1,7 +1,7 @@
 from _env import SimulationEnvironment
 from _config import envConfiguration
 from _graph import ConveyorGraph
-from ppo_agent import Agent
+from ppo_agent_ac_mask import Agent
 import pickle
 import matplotlib.pyplot as plt
 #print ('Einlesen des Datasets')
@@ -34,11 +34,11 @@ agent = Agent(n_actions=env.config.env_ActionSpace,
               input_dims=[len(state)])
 
 #4. Learning loop
-ep_rewards = []
+best_reward = 0
 reward_history = []
 all_rewards = 0
 print('Episode\tReward\tSteps')
-episodes = 1000
+episodes = 10000
 for ep in range(episodes):
     actions = []
     probs = []
@@ -69,8 +69,8 @@ for ep in range(episodes):
         states.append(state),
         masks.append(mask)
 
-        obs = newobs #aktualisieren
-        mask = newmask #aktualisieren
+        obs = newobs #aktualisieren, damit choose_action neue obs hat
+        mask = newmask #aktualisieren, damit choose_action neues mask hat
     
     reward, details = env.calcReward()
     additional_action_reward = details[-2]
@@ -79,7 +79,7 @@ for ep in range(episodes):
         done = (k == len(states)-1)
         all_rewards = reward + additional_action_reward[k]
         agent.remember(observations[k], actions[k], probs[k], vals[k], all_rewards, done, masks[k])
-    agent.learn() #man kann jede 100 Episoden lernen
+    agent.learn() 
 
     #wenn details welche Einträge hat, nimm das letzte (lenfinishedProdukts), sonst setze es zu 0
     finished = details[-1] if details else 0
@@ -88,20 +88,19 @@ for ep in range(episodes):
     #Alle rewards 
     reward_history.append(all_rewards)
 
+    if (ep+1) % 50 == 0:
+        if all_rewards > best_reward:
+            best_reward = all_rewards
+            agent.save_models()
+            print(f"...Das neue beste Gewicht wird mit der besten Belohnung von {best_reward} wird gespeichert...")
+
 
 #5. Plot
 x = [i+1 for i in range(len(reward_history))]
 plt.plot(x, reward_history)
 plt.xlabel('Episode')
 plt.ylabel('Rewards')
-plt.title('PPO on IIOT Testbed Simulation')
+plt.title('PPO on IIOT Testbed Simulation (with Action Masking)')
 plt.grid(True)
-plt.savefig('/Users/macbookair/Desktop/researchUni/git/plot/plot03')
+plt.savefig('/Users/macbookair/Desktop/researchUni/git/plot/plot_ac_mask_01')
 plt.show()
-
-#Bei RL sind die Strafen extrem hoch, hat wahrscheinlich damit zu tun, dass es ziemlich viele steps (duration) genommen wird
-#Aber bei Heuristische Methode ist die Belohnung const bei -800 und duration const -86400 
-#Der Grund: ?
-
-
-#Die besten Gewichte pro 50 Episoden speichern und damit evaluirung machen 

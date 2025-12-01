@@ -3,6 +3,7 @@ from _config import envConfiguration
 from _graph import ConveyorGraph
 from ppo_agent_no_mask import Agent
 import matplotlib.pyplot as plt
+import numpy as np
 
 #1. Set up the env 
 config = envConfiguration()
@@ -32,8 +33,11 @@ agent.load_models()
 #4. Training
 episodes = 10000
 best_reward = 0
-reward_history = []
 all_rewards = 0
+reward_history = []
+plot_avg_reward = []
+
+print('Episode\tReward\tSteps')
 for ep in range(episodes):
     env.setUpEnv()
     done, duration, obs, mask, _ = env.start()
@@ -41,7 +45,7 @@ for ep in range(episodes):
 
     while not done:
         action, prob, val = agent.choose_action(obs, mask)
-        done, duration, newobs, newmask, rest = env.step(action)
+        done, duration, newobs, newmask, _ = env.step(action)
 
         states.append(state)
         obs = newobs
@@ -57,12 +61,22 @@ for ep in range(episodes):
         
     
     finished = details[-1] if details else 0
-    print(f"Episode {ep} Reward per Episode {all_rewards:.2f} Duration: {duration} Produkte {finished}/64")
+    with open('/Users/macbookair/Desktop/researchUni/git/txt/output_eval_no_mask.txt', 'a') as f:
+        ausgabe = f"Episode {ep} Reward per Episode {all_rewards:.2f} Duration: {duration} Produkte {finished}/64\n"
+        print(ausgabe, end='')
+        f.write(ausgabe)
+        f.close()
 
-    reward_history.append(all_rewards)
+    #Alle rewards
+    reward_history.append(reward)
 
-x = [i+1 for i in range(len(reward_history))]
-plt.plot(x, reward_history)
+    #Moving avg der rewards 
+    avg_reward = np.mean(reward_history[-50:])
+    plot_avg_reward.append(avg_reward)
+
+
+x = [i+1 for i in range(len(plot_avg_reward))]
+plt.plot(x, plot_avg_reward)
 plt.xlabel("Episode")
 plt.ylabel("Rewards")
 plt.title("PPO Evaluation on Testbed Simulation (without Action Masking)")

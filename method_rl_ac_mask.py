@@ -4,6 +4,7 @@ from _graph import ConveyorGraph
 from ppo_agent_ac_mask import Agent
 import pickle
 import matplotlib.pyplot as plt
+import numpy as np
 #print ('Einlesen des Datasets')
 #with open ('/Users/macbookair/Desktop/researchUni/git/iiot-testbed/evalDataset.pkl', 'rb') as file:
 #    dataSets = pickle.load(file) #pickle wird verwendet, um aus einer binären Datei ein serialisiertes Objekt zu lesen und zu desialisieren. 'rb' bedeutet Binärlesemodus
@@ -35,8 +36,11 @@ agent = Agent(n_actions=env.config.env_ActionSpace,
 
 #4. Learning loop
 best_reward = 0
-reward_history = []
 all_rewards = 0
+avg_reward = 0
+reward_history = []
+plot_avg_reward = []
+
 print('Episode\tReward\tSteps')
 episodes = 10000
 for ep in range(episodes):
@@ -83,10 +87,12 @@ for ep in range(episodes):
 
     #wenn details welche Einträge hat, nimm das letzte (lenfinishedProdukts), sonst setze es zu 0
     finished = details[-1] if details else 0
-    print(f'Episode: {ep} Reward per Ep: {all_rewards:.2f} Duration: {duration} Produkte {finished}/64')
+    with open('/Users/macbookair/Desktop/researchUni/git/txt/output_rl_ac_mask.txt', 'a') as f:
+        ausgabe = f'Episode: {ep} Reward per Ep: {all_rewards:.2f} Duration: {duration} Produkte {finished}/64\n'
+        print(ausgabe, end='')
+        f.write(ausgabe)
+        f.close()
 
-    #Alle rewards 
-    reward_history.append(all_rewards)
 
     if (ep+1) % 50 == 0:
         if all_rewards > best_reward:
@@ -94,10 +100,15 @@ for ep in range(episodes):
             agent.save_models()
             print(f"...Das neue beste Gewicht wird mit der besten Belohnung von {best_reward} wird gespeichert...")
 
+    #Alle rewards 
+    reward_history.append(all_rewards)
+    avg_reward = np.mean(reward_history[-50:])
+    plot_avg_reward.append(avg_reward)
+
 
 #5. Plot
-x = [i+1 for i in range(len(reward_history))]
-plt.plot(x, reward_history)
+x = [i+1 for i in range(len(plot_avg_reward))]
+plt.plot(x, plot_avg_reward)
 plt.xlabel('Episode')
 plt.ylabel('Rewards')
 plt.title('PPO on IIOT Testbed Simulation (with Action Masking)')

@@ -4,6 +4,7 @@ from _graph import ConveyorGraph
 from ppo_agent_no_mask import Agent
 import pickle
 import matplotlib.pyplot as plt
+import numpy as np
 #print ('Einlesen des Datasets')
 #with open ('/Users/macbookair/Desktop/researchUni/git/iiot-testbed/evalDataset.pkl', 'rb') as file:
 #    dataSets = pickle.load(file) #pickle wird verwendet, um aus einer binären Datei ein serialisiertes Objekt zu lesen und zu desialisieren. 'rb' bedeutet Binärlesemodus
@@ -35,10 +36,13 @@ agent = Agent(n_actions=env.config.env_ActionSpace,
 
 #4. Learning loop
 best_reward = 0.0
-reward_history = []
+avg_reward = 0
 all_rewards = 0
+reward_history = []
+plot_avg_reward = []
+
 print('Episode\tReward\tSteps')
-episodes = 10000
+episodes = 200
 for ep in range(episodes):
     actions = []
     probs = []
@@ -60,7 +64,7 @@ for ep in range(episodes):
     while not done:
         action, prob, val = agent.choose_action(obs, mask) #mask ist eine Liste von bools die sagt welche Aktionen gültig sind
         done, duration, newobs, newmask, rest = env.step(action)
-        #Zwischenspeichern
+        #Zwischenspeichern (alle steps in einer Episode)
         actions.append(action)
         probs.append(prob)
         vals.append(val)
@@ -72,25 +76,35 @@ for ep in range(episodes):
         obs = newobs #aktualisieren
         mask = newmask
 
+
     reward, details = env.calcReward()
     additional_action_reward = details[-2]
 
     for k, state in enumerate(states):
-        done = (k == (len(states)-1)) #wozu ist es?
+        done = (k == (len(states)-1))
         all_rewards = reward + additional_action_reward[k]
         agent.remember(observations[k], actions[k], probs[k], vals[k], all_rewards, done)
     agent.learn()
 
     #wenn details welche Einträge hat, nimm das letzte (lenfinishedProdukts), sonst setze es zu 0
     finished = details[-1] if details else 0
-    print(f'Episode: {ep} Reward per Ep: {all_rewards:.2f} Duration: {duration} Produkte {finished}/64')
+
+    with open('/Users/macbookair/Desktop/researchUni/git/txt/output_rl_no_mask.txt', 'a') as f:
+        ausgabe = f'Episode: {ep} Reward per Ep: {all_rewards:.2f} Duration: {duration} Produkte {finished}/64\n'
+        print(ausgabe, end='')
+        f.write(ausgabe)
+        f.close()
 
     #Alle rewards 
-    reward_history.append(all_rewards)
-    
+    reward_history.append(reward)
+
+    #Moving average 
+    avg_reward = np.mean(reward_history[-50:]) #Durchschnitt von den letzten 50 Episoden 
+    plot_avg_reward.append(avg_reward)
+
     if (ep+1) % 50 == 0:
-        if all_rewards > best_reward:
-            best_reward = all_rewards
+        if reward > best_reward:
+            best_reward = reward
             agent.save_models()
             print(f"...Das neue beste Gewicht mit der besten Belohnung von {best_reward} wird gespeichert...")
 
@@ -101,7 +115,7 @@ plt.xlabel('Episode')
 plt.ylabel('Rewards')
 plt.title('PPO on IIOT Testbed Simulation')
 plt.grid(True)
-plt.savefig('/Users/macbookair/Desktop/researchUni/git/plot/plot_no_mask_01')
+plt.savefig('/Users/macbookair/Desktop/researchUni/git/plot/plot_no_mask_test2')
 plt.show()
 
 

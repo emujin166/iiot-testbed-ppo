@@ -3,6 +3,7 @@ from _config import envConfiguration
 from _graph import ConveyorGraph
 from ppo_agent_ac_mask import Agent
 import matplotlib.pyplot as plt
+import numpy as np
 
 #1. Set up the env and load the best weights 
 config = envConfiguration()
@@ -31,9 +32,14 @@ agent.load_models()
 
 #4. Training 
 episodes = 10000
+
 all_reward = 0
 best_reward = 0
+avg_reward = 0
 reward_history = []
+plot_avg_reward = []
+
+print('Episode\tReward\tSteps')
 for ep in range(episodes):
     states = []
 
@@ -43,23 +49,31 @@ for ep in range(episodes):
     while not done:
         action, prob, val = agent.choose_action(obs,mask)
         done, duration, newobs, newmask, _ = env.step(action)
+        states.append(state)
 
         obs = newobs
         mask = newmask
 
-        reward, details = env.calcReward()
-        additional_action_reward = details[-2]
+    reward, details = env.calcReward()
+    additional_action_reward = details[-2]
 
-        for k, state in enumerate(states):
-            all_reward = reward + additional_action_reward[k]
+    for k, state in enumerate(states):
+        done = (k == (len(states) -1))
+        all_reward = reward + additional_action_reward[k]
 
-        finished = details[-1] if details else 0
-        print(f"Episode {ep} Reward per Episode {all_reward} Duration {duration} Produkte: {finished}/64")
+    finished = details[-1] if details else 0
+    with open('/Users/macbookair/Desktop/researchUni/git/txt/output_eval_ac_mask.txt', 'a') as f:
+        ausgabe = f"Episode {ep} Reward per Episode {all_reward:.2f} Duration {duration} Produkte: {finished}/64\n"
+        print(ausgabe)
+        f.write(ausgabe)
+        f.close()
 
-        reward_history.append(all_reward)
+    reward_history.append(reward)
+    avg_reward = np.mean(reward_history[-50:])
+    plot_avg_reward.append(avg_reward)
 
-x = [i+1 for i in range(len(reward_history))]
-plt.plot(x, reward_history)
+x = [i+1 for i in range(len(plot_avg_reward))]
+plt.plot(x, plot_avg_reward)
 plt.title("PPO Evaluation on Testbed Simulation (with Action Masking)")
 plt.xlabel("Episode")
 plt.ylabel("Rewards")
